@@ -1002,7 +1002,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             PaymentCardToken savedCard = Services.PaymentCard.GetByUserId(order.CustomerAccessUserId).FirstOrDefault(t => t.Token.Equals(cardToken));
             if (savedCard == null)
             {
-                savedCard = Services.PaymentCard.CreatePaymentCard(order.CustomerAccessUserId, order.PaymentMethodId, order.LanguageId, cardName, order.TransactionCardType, order.TransactionCardNumber, cardToken);
+                savedCard = Services.PaymentCard.CreatePaymentCard(order.CustomerAccessUserId, order.PaymentMethodId, cardName, order.TransactionCardType, order.TransactionCardNumber, cardToken);
             }
 
             order.SavedCardId = savedCard.ID;
