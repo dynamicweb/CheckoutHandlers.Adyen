@@ -80,6 +80,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         [DataMember(Name = "paymentMethodType", EmitDefaultValue = false)]
         public string PaymentMethodType { get; set; }
 
+        [DataMember(Name = "subtype", EmitDefaultValue = false)]
+        public string SubType { get; set; }
+
         [DataMember(Name = "qrCodeData", EmitDefaultValue = false)]
         public string QrCodeData { get; set; }
 
