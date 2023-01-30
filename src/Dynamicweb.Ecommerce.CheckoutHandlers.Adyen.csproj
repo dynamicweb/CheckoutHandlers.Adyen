@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>2.1.0</Version>
+    <VersionPrefix>10.0.0</VersionPrefix>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <Description>AdyenCheckout</Description>
+    <Title>AdyenCheckout</Title>
+    <Description>Adyen Checkout Handler</Description>
   </PropertyGroup>
   <PropertyGroup>
     <PackageProjectUrl>https://doc.dynamicweb.com/</PackageProjectUrl>
@@ -17,10 +18,14 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild >true</ContinuousIntegrationBuild>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Dynamicweb" Version="10.0.0-*" />
     <PackageReference Include="Dynamicweb.Core" Version="10.0.0-*" />
     <PackageReference Include="Dynamicweb.Ecommerce" Version="10.0.0-*" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
   </ItemGroup>
 </Project>
