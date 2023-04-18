@@ -21,10 +21,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
     {
         private static class Tags
         {
-            public static string OriginKey = "Adyen.OriginKey";
+            public static string SessionId = "Adyen.PaymentSessionId";
+            public static string SessionData = "Adyen.PaymentSessionData";
             public static string ClientKey = "Adyen.ClientKey";
             public static string Environment = "Adyen.Environment";
-            public static string PaymentMethodsResponse = "Adyen.PaymentMethodsResponse";
             public static string AmountCurrency = "Adyen.Currency";
             public static string AmountValue = "Adyen.Price";
             public static string AdyenJavaScriptUrl = "Adyen.JavaScriptUrl";
@@ -60,8 +60,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         [AddInLabel("API Key"), AddInParameter("ApiKey"), AddInParameterEditor(typeof(TextParameterEditor), "")]
         public string ApiKey { get; set; }
 
-        [AddInLabel("Origin key/Client key"), AddInParameter("OriginKey"), AddInParameterEditor(typeof(TextParameterEditor), "")]
-        public string OriginKey { get; set; }
+        [AddInLabel("Client key"), AddInParameter("ClientKey"), AddInParameterEditor(typeof(TextParameterEditor), "")]
+        public string ClientKey { get; set; }
 
         [AddInLabel("Live URL prefix"), AddInParameter("LiveUrlPrefix"), AddInParameterEditor(typeof(TextParameterEditor), "infoText=If it is not set, the test mode will be used, even if corresponding checkbox is not checked")]
         public string LiveUrlPrefix { get; set; }
@@ -100,23 +100,25 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 throw new ArgumentNullException(nameof(ApiKey), "API key reqired");
             }
 
-            PaymentCardToken savedCard = null;
-            var useCard = NeedUseSavedCard(order, out savedCard);
-            var paymentMethodsRequest = new PaymentMethodsRequest(order, MerchantName, useCard);
-            var paymentMethodsResponse = string.Empty;
+            if (NeedUseSavedCard(order, out var savedCard))
+            {
+                PaymentMethodSelected(order, new PaymentMethodData { PaymentMethod = new PaymentMethod() { Type = CardPaymentMethodName, StoredPaymentMethodId = savedCard.Token } });
+                return string.Empty;
+            }
+            var saveCard = NeedSaveCard(order, CardPaymentMethodName, out var savedCardName);
+            var sessionsRequest = new SessionRequest(order, MerchantName, GetCallbackUrl(order, new NameValueCollection { { "action", "GatewayResponse" } }));
+            if (saveCard)
+            {
+                sessionsRequest.ShopperReference = $"user ID:{order.CustomerAccessUserId}";
+                sessionsRequest.EnableOneClick = true;
+                sessionsRequest.EnablePayOut = true;
+            }
+            SessionsResponse session = null;
             try
             {
-                paymentMethodsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentMethodsUrl(), paymentMethodsRequest.ToJson(), GetEnvironmentType(), ApiKey);
-                if (useCard)
-                {
-                    var storedMethods = Converter.Deserialize<PaymentMethodsResponse>(paymentMethodsResponse);
-                    var selectedMethod = storedMethods?.SavedPaymentMethods?.FirstOrDefault(method => string.Equals(method.CardToken, savedCard.Token, StringComparison.OrdinalIgnoreCase));
-                    if (selectedMethod != null)
-                    {
-                        PaymentMethodSelected(order, new PaymentMethodData { PaymentMethod = selectedMethod.ToPaymentMethod() });
-                        return string.Empty;
-                    }
-                }
+                var sessionsResponse = WebRequestHelper.Request(ApiUrlManager.GetSessionsUrl(), sessionsRequest.ToJson(), GetEnvironmentType(), ApiKey);
+                session = Converter.Deserialize<SessionsResponse>(sessionsResponse);
+
             }
             catch (Exception ex) when (!(ex is ThreadAbortException))
             {
@@ -125,21 +127,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             var paymentMethodsTemplate = new Template(PaymentsTemplate);
             paymentMethodsTemplate.SetTag(Tags.Environment, GetEnvironmentType().ToString().ToLower());
-            paymentMethodsTemplate.SetTag(Tags.PaymentMethodsResponse, paymentMethodsResponse);
-            paymentMethodsTemplate.SetTag(Tags.AmountCurrency, paymentMethodsRequest.Amount.Currency);
-            paymentMethodsTemplate.SetTag(Tags.AmountValue, Converter.ToInt32(paymentMethodsRequest.Amount.Value));
+            paymentMethodsTemplate.SetTag(Tags.ClientKey, ClientKey);
+            paymentMethodsTemplate.SetTag(Tags.SessionId, session.Id);
+            paymentMethodsTemplate.SetTag(Tags.SessionData, session.SessionData);
+            paymentMethodsTemplate.SetTag(Tags.AmountCurrency, order.CurrencyCode);
+            paymentMethodsTemplate.SetTag(Tags.AmountValue, order.Price.PricePIP);
             paymentMethodsTemplate.SetTag(Tags.AdyenCssUrl, ApiUrlManager.GetCssUrl());
             paymentMethodsTemplate.SetTag(Tags.AdyenJavaScriptUrl, ApiUrlManager.GetJavaScriptUrl());
-
-            bool isUsingClientKey = OriginKey.StartsWith("test_", StringComparison.OrdinalIgnoreCase) || OriginKey.StartsWith("live_", StringComparison.OrdinalIgnoreCase);
-            if(isUsingClientKey)
-            {
-                paymentMethodsTemplate.SetTag(Tags.ClientKey, OriginKey);
-            }
-            else
-            {
-                paymentMethodsTemplate.SetTag(Tags.OriginKey, OriginKey);
-            }
 
             return Render(order, paymentMethodsTemplate);
         }
@@ -156,7 +150,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                     Callback(order);
                     return null;
                 }
-
+                var redirectResult = Converter.ToString(Context.Current.Request["redirectResult"]);
                 try
                 {
                     switch (action)
@@ -165,12 +159,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                             PaymentMethodSelected(order, null);
                             return null;
 
-                        case "GetAdditionalDetails":
-                            GetAdditionalDetails(order);
-                            return null;
-
                         case "GatewayResponse":
-                            return HandleThirdPartyGatewayResponse(order);
+                            return HandleThirdPartyGatewayResponse(order, redirectResult);
 
                         default:
                             var message = $"Unknown action: '{action}'";
@@ -247,35 +237,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         }
 
         /// <summary>
-        /// This method must be called only on AJAX request.
-        /// </summary>
-        private void GetAdditionalDetails(Order order)
-        {
-            LogEvent(order, "Get additional payment details");
-
-            Context.Current.Response.Clear();
-            var documentContent = string.Empty;
-            try
-            {
-                documentContent = WebRequestHelper.ReadRequestInputStream();
-            }
-            catch (Exception e)
-            {
-                OnError(order, "Cannot read request data", e, true);
-            }
-
-            if (string.IsNullOrEmpty(documentContent))
-            {
-                OnError(order, "Request data is empty", null, true);
-            }
-
-            HandlePaymentDetailsRequest(order, documentContent);
-        }
-
-        /// <summary>
         /// Executes when customer returned from third-party payment provider page. E.g. Klarna, Paysafecard, a bank, etc.
         /// </summary>
-        private string HandleThirdPartyGatewayResponse(Order order)
+        private string HandleThirdPartyGatewayResponse(Order order, string redirectResult)
         {
             LogEvent(order, "Gateway response handling");
 
@@ -287,12 +251,17 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             var transactionData = Converter.Deserialize<PaymentTransactionData>(order.TransactionToken);
             var details = new Dictionary<string, string>();
-            if (transactionData.RequestKeys != null)
+            if (transactionData.RequestKeys != null && transactionData.RequestKeys.Count > 0)
             {
                 foreach (var key in transactionData.RequestKeys)
                 {
                     details[key] = Context.Current.Request[key];
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(redirectResult))
+            {
+                details["redirectResult"] = redirectResult;
             }
 
             var postValues = new
@@ -400,7 +369,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 if (response.Action.Type.HasValue && response.Action.Type.Value == CheckoutPaymentsAction.CheckoutActionType.Redirect)
                 {
-                    LogEvent(order, $"HandleAdyenPaymentResponse response.Action.Type has a value (redirect); jsonResponse: {jsonResponse}");
                     var transactionData = new PaymentTransactionData(response.Action.PaymentData);
                     if (response.Details != null)
                     {
@@ -423,15 +391,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                     return OnError(order, "Wrong request", null, false);
                 }
 
-                LogEvent(order, $"HandleAdyenPaymentResponse response.Action has a value: {response.Action.Type.GetValueOrDefault()}; jsonResponse: {jsonResponse}");
                 Helper.EndRequest(jsonResponse);
                 return null;
             }
 
             if (response.ResultCode.HasValue)
             {
-                LogEvent(order, $"HandleAdyenPaymentResponse response.ResultCode has a value: {response?.ResultCode}; jsonResponse: {jsonResponse}");
-
                 order.TransactionToken = null;
                 order.TransactionStatus = Enum.GetName(typeof(PaymentResponse.PaymentResultCode), response.ResultCode);
                 order.TransactionNumber = response.PspReference;
@@ -449,7 +414,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                     {
                         string cardToken;
                         response.AdditionalData.TryGetValue("recurring.recurringDetailReference", out cardToken);
-
                         SaveCard(order, cardName, cardToken);
                     }
                 }
@@ -485,7 +449,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                         throw new InvalidOperationException();
 
                     default:
-                        LogEvent(order, $"HandleAdyenPaymentResponse could not resolve ResultCode {response?.ResultCode}; jsonResponse: {jsonResponse}");
                         return null;
                 }
             }
@@ -500,7 +463,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 var paymentDetailsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentDetailsUrl(), json, GetEnvironmentType(), ApiKey);
                 var response = Converter.Deserialize<PaymentResponse>(paymentDetailsResponse);
 
-                return HandleAdyenPaymentResponse(order, response, paymentDetailsResponse, false, null, null);
+                var doSaveCard = NeedSaveCard(order, CardPaymentMethodName, out var cardName);
+                return HandleAdyenPaymentResponse(order, response, paymentDetailsResponse, doSaveCard, cardName, CardPaymentMethodName);
             }
             catch (Exception e) when (!(e is ThreadAbortException))
             {
@@ -996,6 +960,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 order.CustomerAccessUserId <= 0 ||
                 string.IsNullOrEmpty(cardToken))
             {
+                LogError(order, "Unable to save card userId: {0}; card token {1}. Make sure card and recurring token information enabled as additional data at gateway settings.", order.CustomerAccessUserId, cardToken);
                 return;
             }
 

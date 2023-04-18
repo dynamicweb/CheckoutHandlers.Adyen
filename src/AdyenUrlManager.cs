@@ -4,9 +4,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 {
     internal class AdyenUrlManager
     {
-        private const string ApiVersion = "v66";
-        private const string RecurringApiVersion = "v49"; // Recurring API have different version
-        private const string JsCssVersion = "3.10.1";
+        private const string ApiVersion = "v70";
+        private const string JsCssVersion = "5.37.0";
 
         private EnvironmentType _environment;
         private string _liveEndpointUrlPrefix;
@@ -32,6 +31,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 ? string.Format("https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/{0}/adyen.js", JsCssVersion)
                 : string.Format("https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/{0}/adyen.js", JsCssVersion);
         }
+
+        public string GetSessionsUrl() => GetCheckoutEndpointUrl("sessions");
 
         public string GetPaymentMethodsUrl() => GetCheckoutEndpointUrl("paymentMethods");
 
@@ -84,8 +85,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             method = method.TrimStart(new[] { '/', '\\' });
 
             return IsTest
-                ? string.Format("https://pal-test.adyen.com/pal/servlet/Recurring/{0}/{1}", RecurringApiVersion, method)
-                : string.Format("https://{0}-pal-live.adyenpayments.com/pal/servlet/Recurring/{1}/{2}", _liveEndpointUrlPrefix, RecurringApiVersion, method);
+                ? string.Format("https://pal-test.adyen.com/pal/servlet/Recurring/{0}/{1}", ApiVersion, method)
+                : string.Format("https://{0}-pal-live.adyenpayments.com/pal/servlet/Recurring/{1}/{2}", _liveEndpointUrlPrefix, ApiVersion, method);
         }
     }
 }
