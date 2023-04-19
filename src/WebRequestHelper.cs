@@ -49,7 +49,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 }
 
                 var response = (HttpWebResponse)e.Response;
-                var responseText = string.Empty; 
+                var responseText = string.Empty;
                 using (var reader = new StreamReader(response.GetResponseStream()))
                 {
                     responseText = reader.ReadToEnd();

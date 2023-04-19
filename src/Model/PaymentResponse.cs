@@ -71,10 +71,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
             /// </summary>
             [EnumMember(Value = "Refused")]
             Refused = 9,
-            
+
             [EnumMember(Value = "PresentToShopper")]
             PresentToShopper = 10,
-            
+
             [EnumMember(Value = "AuthenticationNotRequired")]
             AuthenticationNotRequired = 11
         }
@@ -111,7 +111,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 
         [DataMember(Name = "refusalReason", EmitDefaultValue = false)]
         public string RefusalReason { get; set; }
-                
+
         [DataMember(Name = "refusalReasonCode", EmitDefaultValue = false)]
         public string RefusalReasonCode { get; set; }
 

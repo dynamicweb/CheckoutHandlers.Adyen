@@ -25,7 +25,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 
         [DataMember(Name = "transStatusReason", EmitDefaultValue = false)]
         public string TransStatusReason { get; set; }
-        
+
         [DataMember(Name = "messageVersion", EmitDefaultValue = false)]
         public string MessageVersion { get; set; }
     }

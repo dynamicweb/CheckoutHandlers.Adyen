@@ -1,5 +1,5 @@
-﻿using System.Runtime.Serialization;
-using Dynamicweb.Ecommerce.Orders;
+﻿using Dynamicweb.Ecommerce.Orders;
+using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 {
@@ -12,8 +12,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         [DataMember(Name = "originalReference", EmitDefaultValue = false)]
         public string TransactionNumber { get; set; }
 
-        public ModificationRequest() : base() 
-        { 
+        public ModificationRequest() : base()
+        {
         }
 
         public ModificationRequest(Order order, string merchantName, bool includeAmount) : base(order.Id, merchantName)

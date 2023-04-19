@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
-using System.Runtime.Serialization;
-using Dynamicweb.Core;
+﻿using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.Orders;
 using Dynamicweb.Ecommerce.Prices;
 using Dynamicweb.Environment;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 {
@@ -26,7 +26,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         public string CountryCode { get; set; }
 
         [DataMember(Name = "lineItems", EmitDefaultValue = false)]
-        public IEnumerable<PaymentOrderLine> OrderLines { get; set; }
+        public IEnumerable<PaymentOrderLine> LineItems { get; set; }
 
         [DataMember(Name = "paymentMethod")]
         public PaymentMethod PaymentMethod { get; set; }
@@ -38,22 +38,22 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         public RiskData RiskData { get; set; }
 
         [DataMember(Name = "shopperEmail", EmitDefaultValue = false)]
-        public string CustomerEmail { get; set; }
+        public string ShopperEmail { get; set; }
 
         [DataMember(Name = "shopperIP", EmitDefaultValue = false)]
-        public string CustomerIP { get; set; }
+        public string ShopperIP { get; set; }
 
         [DataMember(Name = "shopperLocale", EmitDefaultValue = false)]
-        public string CustomerLocale { get; set; }
+        public string ShopperLocale { get; set; }
 
         [DataMember(Name = "shopperName", EmitDefaultValue = false)]
-        public ShopperName CustomerName { get; set; }
+        public ShopperName ShopperName { get; set; }
 
         [DataMember(Name = "shopperReference", EmitDefaultValue = false)]
-        public int CustomerUserId { get; set; }
+        public string ShopperReference { get; set; }
 
         [DataMember(Name = "telephoneNumber", EmitDefaultValue = false)]
-        public string CustomerPhone { get; set; }
+        public string TelephoneNumber { get; set; }
 
         [DataMember(Name = "storePaymentMethod")]
         public bool StorePaymentMethod { get; set; }
@@ -81,26 +81,26 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
             BillingAddress = new BillingAddress(order);
             BrowserInfo = paymentMethodData.BrowserInfo;
             CountryCode = order.CustomerCountryCode;
-            OrderLines = ConvertOrderLines(order, order.OrderLines);
+            LineItems = ConvertOrderLines(order, order.OrderLines);
             PaymentMethod = paymentMethodData.PaymentMethod;
             ReturnUrl = callbackUrl;
             RiskData = paymentMethodData.RiskData;
-            CustomerEmail = order.CustomerEmail;
-            CustomerIP = order.Ip;
-            CustomerLocale = ExecutingContext.GetCulture(true).Name;
-            CustomerName = new ShopperName(order);
-            CustomerPhone = order.CustomerPhone;
+            ShopperEmail = order.CustomerEmail;
+            ShopperIP = order.Ip;
+            ShopperLocale = ExecutingContext.GetCulture(true).Name;
+            ShopperName = new ShopperName(order);
+            TelephoneNumber = order.CustomerPhone;
 
             switch (additionalAction)
             {
                 case PaymentRequestType.UseSavedCard:
-                    CustomerUserId = order.CustomerAccessUserId;
+                    ShopperReference = $"user ID:{order.CustomerAccessUserId}";
                     RecurringProcessingModel = "CardOnFile";
                     ShopperInteraction = "ContAuth";
                     break;
 
                 case PaymentRequestType.SaveCard:
-                    CustomerUserId = order.CustomerAccessUserId;
+                    ShopperReference = $"user ID:{order.CustomerAccessUserId}";
                     RecurringProcessingModel = "CardOnFile";
                     ShopperInteraction = "Ecommerce";
                     StorePaymentMethod = true;
@@ -108,7 +108,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 
                 case PaymentRequestType.Default:
                 default:
-                    CustomerUserId = 0;
+                    ShopperReference = null;
                     RecurringProcessingModel = null;
                     ShopperInteraction = null;
                     StorePaymentMethod = false;
@@ -116,7 +116,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
             }
         }
 
-        private static IEnumerable<PaymentOrderLine> ConvertOrderLines(Order order, OrderLineCollection orderLines)
+        internal static IEnumerable<PaymentOrderLine> ConvertOrderLines(Order order, OrderLineCollection orderLines)
         {
             var result = new List<PaymentOrderLine>();
             foreach (var orderLine in orderLines)
@@ -130,9 +130,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
                     Id = orderLine.Id,
                     Description = orderLine.Product.Name,
                     Quantity = Converter.ToInt32(orderLine.Quantity),
-                    AmountExcludingTax = PriceHelper.ConvertToPIP(order.Currency,orderLine.Price.PriceWithoutVAT),
-                    AmountIncludingTax = PriceHelper.ConvertToPIP(order.Currency, orderLine.Price.PriceWithVAT),
-                    TaxAmount = PriceHelper.ConvertToPIP(order.Currency, orderLine.Price.VAT),
+                    AmountExcludingTax = PriceHelper.ConvertToPIP(order.Currency, orderLine.UnitPrice.PriceWithoutVAT),
+                    AmountIncludingTax = PriceHelper.ConvertToPIP(order.Currency, orderLine.UnitPrice.PriceWithVAT),
+                    TaxAmount = PriceHelper.ConvertToPIP(order.Currency, orderLine.UnitPrice.VAT),
                     TaxPercentage = PriceHelper.ConvertToPIP(order.Currency, orderLine.Price.VATPercent),
                 });
             }

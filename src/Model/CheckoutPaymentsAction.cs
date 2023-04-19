@@ -9,28 +9,28 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         {
             [EnumMember(Value = "await")]
             Await = 1,
-            
+
             [EnumMember(Value = "donate")]
             Donate = 2,
-            
+
             [EnumMember(Value = "qrCode")]
             QrCode = 3,
-            
+
             [EnumMember(Value = "redirect")]
             Redirect = 4,
-            
+
             [EnumMember(Value = "sdk")]
             Sdk = 5,
-            
+
             [EnumMember(Value = "threeDS2Challenge")]
             ThreeDS2Challenge = 6,
-            
+
             [EnumMember(Value = "threeDS2Fingerprint")]
             ThreeDS2Fingerprint = 7,
-            
+
             [EnumMember(Value = "voucher")]
             Voucher = 8,
-            
+
             [EnumMember(Value = "wechatpaySDK")]
             WechatpaySDK = 9
         }
@@ -52,7 +52,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 
         [DataMember(Name = "entity", EmitDefaultValue = false)]
         public string Entity { get; set; }
-        
+
         [DataMember(Name = "initialAmount", EmitDefaultValue = false)]
         public Amount InitialAmount { get; set; }
 

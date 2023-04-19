@@ -1,5 +1,5 @@
-﻿using System.Runtime.Serialization;
-using Dynamicweb.Ecommerce.Orders;
+﻿using Dynamicweb.Ecommerce.Orders;
+using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 {
@@ -14,7 +14,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 
         [DataMember(Name = "countryCode", EmitDefaultValue = false)]
         public string CountryCode { get; set; }
-        
+
         [DataMember(Name = "shopperReference", EmitDefaultValue = false)]
         public int CustomerUserId { get; set; }
 
