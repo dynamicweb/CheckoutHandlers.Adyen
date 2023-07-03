@@ -35,6 +35,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
         private const string CardPaymentMethodName = "scheme";
         private const string RefundIdDelimeter = "_@_";
+        private const string FormTemplateFolder = "eCom7/CheckoutHandler/Adyen/Form";
+        private const string CancelTemplateFolder = "eCom7/CheckoutHandler/Adyen/Cancel";
+        private const string ErrorTemplateFolder = "eCom7/CheckoutHandler/Adyen/Error";
         private static readonly object locker = new object();
 
         private static readonly IList<PaymentResponse.PaymentResultCode> PositivePaymentResultCodes = new[]
@@ -45,6 +48,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         };
 
         private AdyenUrlManager urlManager;
+        private string paymentsTemplate;
+        private string cancelTemplate;
+        private string errorTemplate;
+
         private AdyenUrlManager ApiUrlManager
         {
             get { return urlManager ?? (urlManager = new AdyenUrlManager(GetEnvironmentType(), LiveUrlPrefix)); }
@@ -75,14 +82,35 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         [AddInLabel("Debug mode"), AddInParameter("DebugMode"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
         public bool DebugMode { get; set; }
 
-        [AddInLabel("Payments template"), AddInParameter("PaymentsTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), "folder=templates/eCom7/CheckoutHandler/Adyen/Form")]
-        public string PaymentsTemplate { get; set; }
+        [AddInLabel("Payments template"), AddInParameter("PaymentsTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{FormTemplateFolder}")]
+        public string PaymentsTemplate
+        {
+            get
+            {
+                return TemplateHelper.GetTemplateName(paymentsTemplate);
+            }
+            set => paymentsTemplate = value;
+        }
 
-        [AddInLabel("Cancel template"), AddInParameter("CancelTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), "folder=templates/eCom7/CheckoutHandler/Adyen/Cancel")]
-        public string CancelTemplate { get; set; }
+        [AddInLabel("Cancel template"), AddInParameter("CancelTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{CancelTemplateFolder}")]
+        public string CancelTemplate
+        {
+            get
+            {
+                return TemplateHelper.GetTemplateName(cancelTemplate);
+            }
+            set => cancelTemplate = value;
+        }
 
-        [AddInLabel("Error template"), AddInParameter("ErrorTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), "folder=templates/eCom7/CheckoutHandler/Adyen/Error")]
-        public string ErrorTemplate { get; set; }
+        [AddInLabel("Error template"), AddInParameter("ErrorTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{ErrorTemplateFolder}")]
+        public string ErrorTemplate
+        {
+            get
+            {
+                return TemplateHelper.GetTemplateName(errorTemplate);
+            }
+            set => errorTemplate = value;
+        }
 
         [AddInLabel("HMAC key"), AddInParameter("HmacKey"), AddInParameterGroup("Notification settings"), AddInParameterEditor(typeof(TextParameterEditor), "infoText=If it is not set, notification processing will not be performed, even if it is configured in the Adyen control panel.")]
         public string HmacKey { get; set; }
@@ -125,7 +153,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 OnError(order, ex.Message, ex, false);
             }
 
-            var paymentMethodsTemplate = new Template(PaymentsTemplate);
+            var paymentMethodsTemplate = new Template(TemplateHelper.GetTemplatePath(PaymentsTemplate, FormTemplateFolder));
             paymentMethodsTemplate.SetTag(Tags.Environment, GetEnvironmentType().ToString().ToLower());
             paymentMethodsTemplate.SetTag(Tags.ClientKey, ClientKey);
             paymentMethodsTemplate.SetTag(Tags.SessionId, session.Id);
@@ -323,7 +351,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 CheckoutDone(order);
             }
 
-            var cancelTemplate = new Template(CancelTemplate);
+            var cancelTemplate = new Template(TemplateHelper.GetTemplatePath(CancelTemplate, CancelTemplateFolder));
             cancelTemplate.SetTag("CheckoutHandler:CancelMessage", message);
             var orderRenderer = new Frontend.Renderer();
             orderRenderer.RenderOrderDetails(cancelTemplate, order, true);
@@ -1033,7 +1061,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 RedirectToCart(order);
             }
 
-            var errorTemplate = new Template(ErrorTemplate);
+            var errorTemplate = new Template(TemplateHelper.GetTemplatePath(ErrorTemplate, ErrorTemplateFolder));
             errorTemplate.SetTag("CheckoutHandler:ErrorMessage", message);
 
             return Render(order, errorTemplate);
