@@ -8,6 +8,7 @@ using Dynamicweb.Extensibility.AddIns;
 using Dynamicweb.Extensibility.Editors;
 using Dynamicweb.Rendering;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
@@ -35,10 +36,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
         private const string CardPaymentMethodName = "scheme";
         private const string RefundIdDelimeter = "_@_";
+        private static ConcurrentDictionary<string, Order> _currentOrders = new ConcurrentDictionary<string, Order>();
         private const string FormTemplateFolder = "eCom7/CheckoutHandler/Adyen/Form";
         private const string CancelTemplateFolder = "eCom7/CheckoutHandler/Adyen/Cancel";
         private const string ErrorTemplateFolder = "eCom7/CheckoutHandler/Adyen/Error";
-        private static readonly object locker = new object();
 
         private static readonly IList<PaymentResponse.PaymentResultCode> PositivePaymentResultCodes = new[]
         {
@@ -170,41 +171,77 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         {
             LogEvent(null, "Redirected to Adyen CheckoutHandler");
 
-            lock (locker)
+            order = StartProcessingOrder(order);
+            var originOrderId = order.Id;
+
+            var action = Converter.ToString(Context.Current.Request["action"]);
+            if (string.IsNullOrEmpty(action))
             {
-                var action = Converter.ToString(Context.Current.Request["action"]);
-                if (string.IsNullOrEmpty(action) && !string.IsNullOrEmpty(order.GatewayResult))
-                {
-                    Callback(order);
-                    return null;
-                }
-                var redirectResult = Converter.ToString(Context.Current.Request["redirectResult"]);
                 try
                 {
-                    switch (action)
+                    string jsonData;
+                    using (var inputStream = new StreamReader(Context.Current.Request.InputStream))
                     {
-                        case "SelectMethod":
-                            PaymentMethodSelected(order, null);
-                            return null;
-
-                        case "GatewayResponse":
-                            return HandleThirdPartyGatewayResponse(order, redirectResult);
-
-                        default:
-                            var message = $"Unknown action: '{action}'";
-                            return OnError(order, message, null, Helper.IsAjaxRequest());
+                        jsonData = inputStream.ReadToEnd();
                     }
+
+                    Callback(order, jsonData);
+                    return null;
                 }
-                catch (ThreadAbortException)
+                finally
                 {
-                    return string.Empty;
-                }
-                catch (Exception ex)
-                {
-                    var message = $"Unhandled exception with message: {ex.Message}";
-                    return OnError(order, message, ex, Helper.IsAjaxRequest());
+                    StopProcessingOrder(originOrderId);
                 }
             }
+
+            var redirectResult = Converter.ToString(Context.Current.Request["redirectResult"]);
+            try
+            {
+                switch (action)
+                {
+                    case "SelectMethod":
+                        PaymentMethodSelected(order, null);
+                        return null;
+
+                    case "GatewayResponse":
+                        return HandleThirdPartyGatewayResponse(order, redirectResult);
+
+                    default:
+                        var message = $"Unknown action: '{action}'";
+                        return OnError(order, message, null, Helper.IsAjaxRequest());
+                }
+            }
+            catch (ThreadAbortException)
+            {
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                var message = $"Unhandled exception with message: {ex.Message}";
+                return OnError(order, message, ex, Helper.IsAjaxRequest());
+            }
+            finally
+            {
+                StopProcessingOrder(originOrderId);
+            }
+        }
+
+        private Order StartProcessingOrder(Order order)
+        {
+            var startTime = DateTime.Now;
+            while (!_currentOrders.TryAdd(order.Id, order))
+            {
+                if (DateTime.Now.Subtract(startTime).TotalSeconds > 10)  // Adyen awaits response 10 sec 
+                    break;
+
+                Thread.Sleep(500);
+            }
+            return order;
+        }
+
+        private void StopProcessingOrder(string orderId)
+        {
+            _currentOrders.TryRemove(orderId, out Order outOrder);
         }
 
         /// <summary>
@@ -377,7 +414,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             order.TransactionAmount = 0;
             order.GatewayResult = "Paynemt pending or received";
-            order.TransactionStatus = "It's not possible to obtain the final status of the payment at this time. Check it in Adyen control panel later.";
+            order.TransactionStatus = "Check payment in Adyen control panel."; //database limit is 50
 
             SetOrderComplete(order);
             CheckoutDone(order);
@@ -500,7 +537,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             }
         }
 
-        private void Callback(Order order)
+        private void Callback(Order order, string jsonData)
         {
             LogEvent(order, "Notification callback started");
 
@@ -514,14 +551,14 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             NotificationRequest requestData = null;
             try
             {
-                if (string.IsNullOrEmpty(order.GatewayResult))
+                if (string.IsNullOrEmpty(jsonData))
                 {
                     doHandleNotification = false;
                 }
 
                 if (doHandleNotification)
                 {
-                    requestData = Converter.Deserialize<NotificationRequest>(order.GatewayResult);
+                    requestData = Converter.Deserialize<NotificationRequest>(jsonData);
                     if (requestData == null)
                     {
                         doHandleNotification = false;
@@ -530,7 +567,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
                 if (DebugMode)
                 {
-                    LogEvent(order, "Notification contents: {0}", order.GatewayResult);
+                    LogEvent(order, "Notification contents: {0}", jsonData);
                 }
             }
             catch
@@ -542,11 +579,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 LogEvent(order, "Notification callback failed with message: Notification data is empty or has wrong format");
                 return;
-            }
-            else
-            {
-                order.GatewayResult = string.Empty;
-                Services.Orders.UpdateGatewayResult(order, false);
             }
 
             try
@@ -790,7 +822,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 var captureRequest = new ModificationRequest(order, MerchantName, true);
 
-                var captureResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetCaptureUrl(), captureRequest.ToJson(), GetEnvironmentType(), ApiKey);
+                var captureResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetCaptureUrl(order.TransactionNumber), captureRequest.ToJson(), GetEnvironmentType(), ApiKey);
                 var captureResponse = Converter.DeserializeCompact<ModificationResponse>(captureResponseRaw);
 
                 return HandleCaptureResponse(order, captureResponse);
@@ -805,23 +837,18 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
         private OrderCaptureInfo HandleCaptureResponse(Order order, ModificationResponse response)
         {
-            var resultCode = response.GetResultCode();
-            if (!resultCode.HasValue || !string.IsNullOrEmpty(response.ErrorCode))
+            if (response.NotificationItems != null)
             {
-                throw new InvalidDataException(response.Message);
+                string infoTxt = string.Format("Payment was unsucceeded with error {0}/{1}", response.NotificationItems[0].Reason, response.Status);
+                SetCaptureFailed(order, infoTxt);
+                return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Failed, infoTxt);
             }
 
-            order.CaptureInfo.Message = response.Message;
-            if (resultCode == ModificationResponse.ModificationResultCode.CaptureReceived)
-            {
-                LogEvent(order, "Capture successful", DebuggingInfoType.CaptureResult);
-                return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Success, "Capture successful");
-            }
+            order.CaptureInfo.Message = response.Status;
+            order.TransactionAmount = response.Amount.Value.Value;
 
-            string infoTxt = string.Format("Payment was unsucceeded with error {0}/{1} - {2}", resultCode, response.Status, response.Message);
-            SetCaptureFailed(order, infoTxt);
-
-            return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Failed, infoTxt);
+            LogEvent(order, "Capture successful", DebuggingInfoType.CaptureResult);
+            return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Success, "Capture successful");
         }
 
         #endregion
@@ -843,13 +870,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 var cancelRequest = new ModificationRequest(order, MerchantName, false);
 
-                var cancelResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetCancelUrl(), cancelRequest.ToJson(), GetEnvironmentType(), ApiKey);
+                var cancelResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetCancelUrl(order.TransactionNumber), cancelRequest.ToJson(), GetEnvironmentType(), ApiKey);
                 var cancelResponse = Converter.DeserializeCompact<ModificationResponse>(cancelResponseRaw);
 
-                var resultCode = cancelResponse.GetResultCode();
-                if (resultCode != ModificationResponse.ModificationResultCode.CancelReceived)
+                if (cancelResponse.NotificationItems != null)
                 {
-                    LogError(order, "Cancel order failed with error {0}/{1} - {2}", resultCode, cancelResponse.Status, cancelResponse.Message);
+                    LogError(order, "Cancel order failed with error {0}/{1}", cancelResponse.NotificationItems[0].Reason, cancelResponse.Status);
                     return false;
                 }
 
@@ -867,7 +893,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
         #region IFullReturn, IPartialReturn
 
-        public void FullReturn(Order order) => Refund(order, Converter.ToInt64(order.TransactionAmount * 100));
+        public void FullReturn(Order order) => Refund(order, Converter.ToInt64(order.TransactionAmount));
 
         public void PartialReturn(Order order, Order originalOrder) => Refund(originalOrder, order.Price.PricePIP);
 
@@ -906,13 +932,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 var refundRequest = new ModificationRequest(order, MerchantName, amountPIP);
                 refundRequest.OrderId = $"{refundRequest.OrderId}{RefundIdDelimeter}{operationId}"; // Add some UID to find this refund on notification handling
 
-                var refundResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetRefundUrl(), refundRequest.ToJson(), GetEnvironmentType(), ApiKey);
+                var refundResponseRaw = WebRequestHelper.Request(ApiUrlManager.GetRefundUrl(order.TransactionNumber), refundRequest.ToJson(), GetEnvironmentType(), ApiKey);
                 var refundResponse = Converter.DeserializeCompact<ModificationResponse>(refundResponseRaw);
 
-                var resultCode = refundResponse.GetResultCode();
-                if (resultCode != ModificationResponse.ModificationResultCode.RefundReceived)
+                if (refundResponse.NotificationItems != null)
                 {
-                    errorText = $"Refund failed with error {resultCode}/{refundResponse.Status} - {refundResponse.Message}";
+                    errorText = string.Format("Refund failed with error {0}/{1}", refundResponse.NotificationItems[0].Reason, refundResponse.Status);
                     OrderReturnInfo.SaveReturnOperation(OrderReturnOperationState.Failed, errorText, amount, order, operationId);
                     LogError(order, errorText, DebuggingInfoType.ReturnResult);
                     return;
@@ -1039,7 +1064,10 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             // Downgrade order, set context cart, etc
             order.TransactionStatus = transactionStatus;
-            CheckoutDone(order);
+            if (!order.Complete)
+            {
+                CheckoutDone(order);
+            }
 
             // Show error
             if (isAjax)

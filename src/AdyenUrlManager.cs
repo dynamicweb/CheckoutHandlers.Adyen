@@ -40,11 +40,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
         public string GetPaymentDetailsUrl() => GetCheckoutEndpointUrl("payments/details");
 
-        public string GetCaptureUrl() => GetStandardEndpointUrl("capture");
+        public string GetCaptureUrl(string paymentPspReference) => GetCheckoutEndpointUrl($"/payments/{paymentPspReference}/captures");
 
-        public string GetCancelUrl() => GetStandardEndpointUrl("cancel");
+        public string GetCancelUrl(string paymentPspReference) => GetCheckoutEndpointUrl($"/payments/{paymentPspReference}/cancels");
 
-        public string GetRefundUrl() => GetStandardEndpointUrl("refund");
+        public string GetRefundUrl(string paymentPspReference) => GetCheckoutEndpointUrl($"/payments/{paymentPspReference}/refunds");
 
         public string GetSavedPaymentMethodRemoveUrl() => GetRecurringEndpointUrl("disable");
 
@@ -59,20 +59,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             return IsTest
                 ? string.Format("https://checkout-test.adyen.com/{0}/{1}", ApiVersion, method)
                 : string.Format("https://{0}-checkout-live.adyenpayments.com/checkout/{1}/{2}", _liveEndpointUrlPrefix, ApiVersion, method);
-        }
-
-        private string GetStandardEndpointUrl(string method)
-        {
-            if (string.IsNullOrEmpty(method))
-            {
-                throw new ArgumentNullException(nameof(method));
-            }
-
-            method = method.TrimStart(new[] { '/', '\\' });
-
-            return IsTest
-                ? string.Format("https://pal-test.adyen.com/pal/servlet/Payment/{0}/{1}", ApiVersion, method)
-                : string.Format("https://{0}-pal-live.adyenpayments.com/pal/servlet/Payment/{1}/{2}", _liveEndpointUrlPrefix, ApiVersion, method);
         }
 
         private string GetRecurringEndpointUrl(string method)
