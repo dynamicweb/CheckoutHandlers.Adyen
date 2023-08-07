@@ -1,6 +1,6 @@
-﻿using System.Runtime.Serialization;
-using Dynamicweb.Core;
+﻿using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.Orders;
+using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 {

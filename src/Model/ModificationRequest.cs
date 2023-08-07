@@ -6,11 +6,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
     [DataContract]
     public class ModificationRequest : RequestBase
     {
-        [DataMember(Name = "modificationAmount", EmitDefaultValue = false)]
+        [DataMember(Name = "amount", EmitDefaultValue = false)]
         public Amount Amount { get; set; }
-
-        [DataMember(Name = "originalReference", EmitDefaultValue = false)]
-        public string TransactionNumber { get; set; }
 
         public ModificationRequest() : base()
         {
@@ -22,7 +19,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
             {
                 Amount = new Amount(order);
             }
-            TransactionNumber = order.TransactionNumber;
         }
 
         public ModificationRequest(Order order, string merchantName, long amount) : base(order.Id, merchantName)
@@ -32,7 +28,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
                 Currency = order.CurrencyCode,
                 Value = amount,
             };
-            TransactionNumber = order.TransactionNumber;
         }
     }
 }
