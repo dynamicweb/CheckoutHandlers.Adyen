@@ -2,13 +2,14 @@
 using Dynamicweb.Core;
 using Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model.Notification;
 using Dynamicweb.Ecommerce.Orders;
+using Dynamicweb.Environment.Helpers;
+using Dynamicweb.Frontend;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Web;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 {
@@ -19,17 +20,14 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             return "application/json".Equals(Context.Current.Request.Headers["Content-Type"], StringComparison.OrdinalIgnoreCase);
         }
 
-        public static void EndRequest<T>(T obj) => EndRequest(Converter.SerializeCompact(obj));
+        public static ContentOutputResult EndRequest<T>(T obj) => EndRequest(Converter.SerializeCompact(obj));
 
-        public static void EndRequest(string json)
+        public static ContentOutputResult EndRequest(string json)
         {
             if (!string.IsNullOrEmpty(json))
-            {
-                Context.Current.Response.Clear();
-                Context.Current.Response.Write(json);
-                Context.Current.Response.Flush();
-            }
-            Context.Current.Response.End();
+                return new() { Content = json };
+
+            return ContentOutputResult.Empty;
         }
 
         public static string GetCallbackUrl(string baseUrl, NameValueCollection parameters)
@@ -37,7 +35,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             var uriBuilder = new UriBuilder(baseUrl);
             if (parameters != null)
             {
-                var query = HttpUtility.ParseQueryString(uriBuilder.Query);
+                NameValueCollection query = LinkHelper.ParseQueryString(uriBuilder.Query);
                 foreach (string key in parameters)
                 {
                     query[key] = parameters[key];
