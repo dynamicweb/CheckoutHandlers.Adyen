@@ -21,6 +21,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageIcon>adyen-logo.png</PackageIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Dynamicweb.Core" Version="10.2.1" />
@@ -29,5 +30,11 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Updates\Payments.cshtml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="adyen-logo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 </Project>
