@@ -31,6 +31,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             public static string AmountValue = "Adyen.Price";
             public static string AdyenJavaScriptUrl = "Adyen.JavaScriptUrl";
             public static string AdyenCssUrl = "Adyen.CssUrl";
+            public static string AdyenJsIntegrityKey = "Adyen.JsIntegrityKey";
+            public static string AdyenCssIntegrityKey = "Adyen.CssIntegrityKey";
         }
 
         #region Fields
@@ -165,6 +167,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             paymentMethodsTemplate.SetTag(Tags.AmountValue, order.Price.PricePIP);
             paymentMethodsTemplate.SetTag(Tags.AdyenCssUrl, ApiUrlManager.GetCssUrl());
             paymentMethodsTemplate.SetTag(Tags.AdyenJavaScriptUrl, ApiUrlManager.GetJavaScriptUrl());
+            paymentMethodsTemplate.SetTag(Tags.AdyenJsIntegrityKey, ApiUrlManager.JsIntegrityKey);
+            paymentMethodsTemplate.SetTag(Tags.AdyenCssIntegrityKey, ApiUrlManager.CssIntegrityKey);
 
             return new ContentOutputResult
             {
@@ -288,9 +292,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             var paymentRequest = new PaymentRequest(order, paymentMethodData, MerchantName, GetCallbackUrl(order, new NameValueCollection { ["action"] = "GatewayResponse" }), additionalAction);
             try
             {
-                var paymentMethodsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentUrl(), paymentRequest.ToJson(), GetEnvironmentType(), ApiKey);
-                var paymentResponse = Converter.Deserialize<PaymentResponse>(paymentMethodsResponse);
+                string paymentMethodsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentUrl(), paymentRequest.ToJson(), GetEnvironmentType(), ApiKey);
 
+                var error = Converter.Deserialize<ServiceError>(paymentMethodsResponse);
+                if (!string.IsNullOrEmpty(error.ErrorCode))
+                    return OnError(order, $"Error code: {error.ErrorCode}. {error.Message}", null, Helper.IsAjaxRequest());
+
+                var paymentResponse = Converter.Deserialize<PaymentResponse>(paymentMethodsResponse);
                 return HandleAdyenPaymentResponse(order, paymentResponse, paymentMethodsResponse, doSaveCard, cardName, paymentMethodData.PaymentMethod.Type);
             }
             catch (Exception e) when (e is not ThreadAbortException)

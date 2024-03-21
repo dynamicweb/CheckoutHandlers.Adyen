@@ -7,6 +7,7 @@ using Dynamicweb.Frontend;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,15 +21,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             return "application/json".Equals(Context.Current.Request.Headers["Content-Type"], StringComparison.OrdinalIgnoreCase);
         }
 
-        public static ContentOutputResult EndRequest<T>(T obj) => EndRequest(Converter.SerializeCompact(obj));
+        public static StreamOutputResult EndRequest<T>(T obj) => EndRequest(Converter.SerializeCompact(obj));
 
-        public static ContentOutputResult EndRequest(string json)
+        public static StreamOutputResult EndRequest(string json) => new StreamOutputResult
         {
-            if (!string.IsNullOrEmpty(json))
-                return new() { Content = json };
-
-            return ContentOutputResult.Empty;
-        }
+            ContentStream = new MemoryStream(Encoding.UTF8.GetBytes(json ?? string.Empty)),
+            ContentType = "application/json"
+        };
 
         public static string GetCallbackUrl(string baseUrl, NameValueCollection parameters)
         {
@@ -40,7 +39,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 {
                     query[key] = parameters[key];
                 }
-                uriBuilder.Query = query.ToString();
+
+                uriBuilder.Query = string.Join("&", query.AllKeys.Select(key => $"{key}={query[key]}"));
             }
 
             return uriBuilder.Uri.ToString();

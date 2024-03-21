@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -29,9 +30,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 handler.ServerCertificateCustomValidationCallback = ServerCertificateValidationCallback;
                 using (var client = new HttpClient(handler))
                 {
+                    client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+                    {
+                        NoCache = true
+                    };
                     var content = new StringContent(json, Encoding.UTF8, "application/json");
-                    content.Headers.Add("Accept-Charset", "UTF-8");
-                    content.Headers.Add("Cache-Control", "no-cache");
                     content.Headers.Add("x-api-key", apiKey);
                     using (HttpResponseMessage response = client.PostAsync(endpoint, content).GetAwaiter().GetResult())
                     {
@@ -52,7 +55,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 using (var readStream = new StreamReader(receiveStream, Encoding.UTF8))
                 {
-                    return readStream.ReadToEnd();
+                    return readStream.ReadToEndAsync().GetAwaiter().GetResult();
                 }
             }
         }
