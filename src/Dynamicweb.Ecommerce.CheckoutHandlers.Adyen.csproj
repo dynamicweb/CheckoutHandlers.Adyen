@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <VersionPrefix>10.0.2</VersionPrefix>
+    <VersionPrefix>10.1.0</VersionPrefix>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Title>Adyen</Title>
     <Description>Adyen Checkout Handler</Description>
@@ -14,20 +14,27 @@
     <Copyright>Copyright © 2023 Dynamicweb Software A/S</Copyright>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageIcon>adyen-logo.png</PackageIcon>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Dynamicweb.Core" Version="10.0.2" />
-    <PackageReference Include="Dynamicweb.Ecommerce" Version="10.0.2" />
+    <PackageReference Include="Dynamicweb.Core" Version="10.2.1" />
+    <PackageReference Include="Dynamicweb.Ecommerce" Version="10.2.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Updates\Payments.cshtml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="adyen-logo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 </Project>

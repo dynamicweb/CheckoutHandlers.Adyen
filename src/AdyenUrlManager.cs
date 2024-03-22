@@ -4,13 +4,17 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 {
     internal class AdyenUrlManager
     {
-        private const string ApiVersion = "v70";
-        private const string JsCssVersion = "5.37.0";
+        private const string ApiVersion = "v71";
+        private const string JsCssVersion = "5.59.0";
 
         private EnvironmentType _environment;
         private string _liveEndpointUrlPrefix;
 
         private bool IsTest => _environment == EnvironmentType.Test;
+
+        public string JsIntegrityKey => "sha384-O8p0CLZyOw1jkmYN7ZwJxWzd+sDYRFGpLEffqc+dKye24gFImbU72did4PC7ysTY";
+
+        public string CssIntegrityKey => "sha384-zgFNrGzbwuX5qJLys75cOUIGru/BoEzhGMyC07I3OSdHqXuhUfoDPVG03G+61oF4";
 
         public AdyenUrlManager(EnvironmentType environment, string liveEndpointUrlPrefix)
         {

@@ -1,5 +1,6 @@
 ﻿using Dynamicweb.Core;
 using Dynamicweb.Core.Json.Settings;
+using System;
 using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
@@ -10,6 +11,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
         /// <summary>
         /// Compact serializer settings. Do not excludes default value.
         /// </summary>
+        [Obsolete("Don't use it.")]
         protected static readonly JsonSettings JsonSettings = new JsonSettings
         {
             Formatting = Formatting.None,
@@ -33,6 +35,6 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
             OrderId = orderId;
         }
 
-        public virtual string ToJson() => Converter.Serialize(this, JsonSettings);
+        public virtual string ToJson() => Converter.Serialize(this);
     }
 }
