@@ -40,10 +40,10 @@
         amount: {
             currency: '@GetString("Adyen.Currency")',
             value: @GetLong("Adyen.Price")
-            },
+        },
         enableStoreDetails: true,
-        paymentMethodsResponse: @GetString("Adyen.PaymentMethods")
-        };
+        paymentMethodsResponse: JSON.parse(`@GetString("Adyen.PaymentMethods")`)
+	};
 
     const checkout = await AdyenCheckout(configuration);
     const paymentMethod = checkout.paymentMethodsResponse.storedPaymentMethods[0];
