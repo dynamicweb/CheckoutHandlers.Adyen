@@ -911,10 +911,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Failed, infoTxt);
             }
 
+            double capturedAmount = response.Amount.Value.Value / 100d;
             order.CaptureInfo.Message = response.Status;
-            order.TransactionAmount = response.Amount.Value.Value;
+            order.TransactionAmount = capturedAmount;
 
-            LogEvent(order, "Capture successful", DebuggingInfoType.CaptureResult);
+            LogEvent(order, string.Format("Message=\"{0}\" Amount=\"{1:f2}\"", "Capture successful", capturedAmount), DebuggingInfoType.CaptureResult);
             return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Success, "Capture successful");
         }
 

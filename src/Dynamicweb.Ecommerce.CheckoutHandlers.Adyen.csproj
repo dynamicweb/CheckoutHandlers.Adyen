@@ -25,6 +25,8 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Updates\Card.cshtml" />
+    <None Remove="Updates\checkouthandler_cancel.html" />
+    <None Remove="Updates\checkouthandler_error.cshtml" />
   </ItemGroup>
   <ItemGroup>
 	  <PackageReference Include="Dynamicweb.Core" Version="10.2.1" />
@@ -33,6 +35,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Updates\Card.cshtml" />
+    <EmbeddedResource Include="Updates\checkouthandler_cancel.html" />
+    <EmbeddedResource Include="Updates\checkouthandler_error.cshtml" />
     <EmbeddedResource Include="Updates\Payments.cshtml" />
   </ItemGroup>
   <ItemGroup>
