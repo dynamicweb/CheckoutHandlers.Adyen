@@ -22,17 +22,17 @@
       integrity="@GetString("Adyen.CssIntegrityKey")"
       crossorigin="anonymous">
 
-<div id="dropin-container"></div>
+<div id="card-container"></div>
+<span style="color:red" id="errorsContainer"></span>
 
 <script type="module">
     const baseUrl = '/Default.aspx?ID=@GetGlobalValue("Global:Page.ID")&CheckoutHandlerOrderID=@GetString("Ecom:Order.ID")&redirect=false';
     const configuration = {
-        onSubmit: function (state, dropin) {
-            dropin.setStatus('loading');
-            processPaymentOperation(baseUrl + '&Action=SelectMethod', state.data, dropin);
+        onSubmit: function (state, card) {
+            processPaymentOperation(baseUrl + '&Action=UseSavedMethod', state.data, card);
         },
-        onAdditionalDetails: (state, dropin) => { },
-        onPaymentCompleted: (result, component) => { },
+        onAdditionalDetails: (state, card) => { },
+        onPaymentCompleted: (result, card) => { },
         showPayButton: true,
         locale: '@currentLocale',
         environment: '@GetString("Adyen.Environment")',
@@ -41,16 +41,15 @@
             currency: '@GetString("Adyen.Currency")',
             value: @GetLong("Adyen.Price")
         },
-        session: {
-            id: '@GetString("Adyen.PaymentSessionId")',
-            sessionData: '@GetString("Adyen.PaymentSessionData")'
-        }
-    };
+        enableStoreDetails: true,
+        paymentMethodsResponse: JSON.parse(`@GetString("Adyen.PaymentMethods")`)
+	};
 
     const checkout = await AdyenCheckout(configuration);
-    checkout.create('dropin').mount('#dropin-container');
+    const paymentMethod = checkout.paymentMethodsResponse.storedPaymentMethods[0];
+    const cardComponent = checkout.create('card', paymentMethod).mount('#card-container');
 
-    async function processPaymentOperation(url, data, dropin) {
+    async function processPaymentOperation(url, data, card) {
         const configuration = {
             method: 'POST',
             headers: {
@@ -61,34 +60,27 @@
         };
         const response = await fetch(url, configuration);
         if (!response.ok) {
-            showError(`Something went wrong. Response status: ${response.status}`, dropin);
+            showError(`Something went wrong. Response status: ${response.status}`);
             return;
         }
 
         const json = await response.json();
         if (json.redirectToReceipt) {
-            // show payment result and redirect to receipt
-            dropin.setStatus("success");
-            setTimeout(function () {
-                document.location = json.redirectToReceipt;
-            }, 1500);
+            document.location = json.redirectToReceipt;
             return;
         }
 
         if (json.action) {
-            dropin.handleAction(json.action);
+            card.handleAction(json.action);
         } else if (json.errorCode) {
-            showError(json.message, dropin);
+            showError(json.message);
         } else {
-            showError("Something went wrong.", dropin);
+            showError(null);
         }
     }
 
-    function showError(message, dropin) {
-        if (message && message.length > 0) {
-            dropin.setStatus("error", { message: message });
-        } else {
-            dropin.setStatus("error");
-        }
+    function showError(message) {
+        const errorsContainer = document.getElementById("errorsContainer");
+        errorsContainer.textContent = message && message.length > 0 ? message : "Unhandled error is occured";
     }
 </script>

@@ -33,6 +33,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             public static string AdyenCssUrl = "Adyen.CssUrl";
             public static string AdyenJsIntegrityKey = "Adyen.JsIntegrityKey";
             public static string AdyenCssIntegrityKey = "Adyen.CssIntegrityKey";
+            public static string AdyenPaymentMethods = "Adyen.PaymentMethods";
         }
 
         #region Fields
@@ -43,6 +44,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         private const string FormTemplateFolder = "eCom7/CheckoutHandler/Adyen/Form";
         private const string CancelTemplateFolder = "eCom7/CheckoutHandler/Adyen/Cancel";
         private const string ErrorTemplateFolder = "eCom7/CheckoutHandler/Adyen/Error";
+        private const string CardTemplateFolder = "eCom7/CheckoutHandler/Adyen/Card";
 
         private static readonly IList<PaymentResponse.PaymentResultCode> PositivePaymentResultCodes = new[]
         {
@@ -55,6 +57,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         private string paymentsTemplate;
         private string cancelTemplate;
         private string errorTemplate;
+        private string storedCardTemplate;
+
 
         private AdyenUrlManager ApiUrlManager
         {
@@ -85,6 +89,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         [AddInParameter("Allow save cards"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
         public bool AllowSaveCards { get; set; }
 
+        [AddInParameter("Skip security code for one-off payments"), AddInParameterEditor(typeof(YesNoParameterEditor), "infoText=If not checked, the provider will redirect you to a template where you can enter the security code of your saved card. If checked, the provider will attempt to complete the payment transaction using the stored card data. Please note: SkipCvCForOneClick must be enabled on your Adyen account to make it work.")]
+        public bool SkipCvCForOneClickPayment { get; set; }
+
         [AddInLabel("Test mode"), AddInParameter("TestMode"), AddInParameterEditor(typeof(YesNoParameterEditor), "")]
         public bool TestMode { get; set; }
 
@@ -112,6 +119,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             set => errorTemplate = value;
         }
 
+        [AddInLabel("Stored card details template"), AddInParameter("StoredCardTemplate"), AddInParameterGroup("Template settings"), AddInParameterEditor(typeof(TemplateParameterEditor), $"folder=templates/{CardTemplateFolder};infoText=Template where you can set security card code. It is used if the setting 'Skip security code for one-off payments' is unchecked.")]
+        public string StoredCardTemplate
+        {
+            get => TemplateHelper.GetTemplateName(storedCardTemplate);
+            set => storedCardTemplate = value;
+        }
+
         [AddInLabel("HMAC key"), AddInParameter("HmacKey"), AddInParameterGroup("Notification settings"), AddInParameterEditor(typeof(TextParameterEditor), "infoText=If it is not set, notification processing will not be performed, even if it is configured in the Adyen control panel.")]
         public string HmacKey { get; set; }
 
@@ -128,14 +142,42 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             if (NeedUseSavedCard(order, out PaymentCardToken savedCard))
             {
-                return PaymentMethodSelected(order, new()
+                if (SkipCvCForOneClickPayment)
                 {
-                    PaymentMethod = new PaymentMethod
+                    return PaymentMethodSelected(order, new()
                     {
-                        Type = CardPaymentMethodName,
-                        StoredPaymentMethodId = savedCard.Token
+                        PaymentMethod = new PaymentMethod
+                        {
+                            Type = CardPaymentMethodName,
+                            StoredPaymentMethodId = savedCard.Token
+                        }
+                    });
+                }
+                else
+                {
+                    var paymentMethodsRequest = new PaymentMethodsRequest(order, MerchantName, true);
+                    string paymentMethodsResponse;
+                    try
+                    {
+                        paymentMethodsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentMethodsUrl(), paymentMethodsRequest.ToJson(), GetEnvironmentType(), ApiKey);
                     }
-                });
+                    catch (Exception ex) when (ex is not ThreadAbortException)
+                    {
+                        return OnError(order, ex.Message, ex, false);
+                    }
+
+                    var paymentMethodsData = Converter.Deserialize<PaymentMethodsResponse>(paymentMethodsResponse);
+                    paymentMethodsData.SavedPaymentMethods = paymentMethodsData.SavedPaymentMethods.Where(method => method.CardToken.Equals(savedCard.Token, StringComparison.OrdinalIgnoreCase));
+
+                    var storedMethodTemplate = new Template(TemplateHelper.GetTemplatePath(StoredCardTemplate, CardTemplateFolder));
+                    SetCommonTemplateTags(storedMethodTemplate);
+                    storedMethodTemplate.SetTag(Tags.AdyenPaymentMethods, Converter.Serialize(paymentMethodsData));
+
+                    return new ContentOutputResult
+                    {
+                        Content = Render(order, storedMethodTemplate)
+                    };
+                }
             }
 
             bool saveCard = NeedSaveCard(order, CardPaymentMethodName, out var _);
@@ -143,7 +185,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             var sessionsRequest = new SessionRequest(order, MerchantName, callbackUrl);
             if (saveCard)
             {
-                sessionsRequest.ShopperReference = $"user ID:{order.CustomerAccessUserId}";
+                sessionsRequest.ShopperReference = Helper.GetShopperReference(order);
                 sessionsRequest.EnableOneClick = true;
                 sessionsRequest.EnablePayOut = true;
             }
@@ -159,21 +201,26 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             }
 
             var paymentMethodsTemplate = new Template(TemplateHelper.GetTemplatePath(PaymentsTemplate, FormTemplateFolder));
-            paymentMethodsTemplate.SetTag(Tags.Environment, GetEnvironmentType().ToString().ToLower());
-            paymentMethodsTemplate.SetTag(Tags.ClientKey, ClientKey);
+            SetCommonTemplateTags(paymentMethodsTemplate);
             paymentMethodsTemplate.SetTag(Tags.SessionId, session.Id);
             paymentMethodsTemplate.SetTag(Tags.SessionData, session.SessionData);
-            paymentMethodsTemplate.SetTag(Tags.AmountCurrency, order.CurrencyCode);
-            paymentMethodsTemplate.SetTag(Tags.AmountValue, order.Price.PricePIP);
-            paymentMethodsTemplate.SetTag(Tags.AdyenCssUrl, ApiUrlManager.GetCssUrl());
-            paymentMethodsTemplate.SetTag(Tags.AdyenJavaScriptUrl, ApiUrlManager.GetJavaScriptUrl());
-            paymentMethodsTemplate.SetTag(Tags.AdyenJsIntegrityKey, ApiUrlManager.JsIntegrityKey);
-            paymentMethodsTemplate.SetTag(Tags.AdyenCssIntegrityKey, ApiUrlManager.CssIntegrityKey);
 
             return new ContentOutputResult
             {
                 Content = Render(order, paymentMethodsTemplate)
             };
+
+            void SetCommonTemplateTags(Template template)
+            {
+                template.SetTag(Tags.Environment, GetEnvironmentType().ToString().ToLower());
+                template.SetTag(Tags.ClientKey, ClientKey);
+                template.SetTag(Tags.AmountCurrency, order.CurrencyCode);
+                template.SetTag(Tags.AmountValue, order.Price.PricePIP);
+                template.SetTag(Tags.AdyenCssUrl, ApiUrlManager.GetCssUrl());
+                template.SetTag(Tags.AdyenJavaScriptUrl, ApiUrlManager.GetJavaScriptUrl());
+                template.SetTag(Tags.AdyenJsIntegrityKey, ApiUrlManager.JsIntegrityKey);
+                template.SetTag(Tags.AdyenCssIntegrityKey, ApiUrlManager.CssIntegrityKey);
+            }
         }
 
         public override OutputResult HandleRequest(Order order)
@@ -214,6 +261,9 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                     case "GatewayResponse":
                         return HandleThirdPartyGatewayResponse(order, redirectResult);
 
+                    case "UseSavedMethod":
+                        return HandleSavedMethod();
+
                     default:
                         string message = $"Unknown action: '{action}'";
                         return OnError(order, message, null, Helper.IsAjaxRequest());
@@ -225,12 +275,47 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             }
             catch (Exception ex)
             {
-                string message = $"Unhandled exception with message: {ex.Message}";
-                return OnError(order, message, ex, Helper.IsAjaxRequest());
+                return OnError(order, ex.Message, ex, Helper.IsAjaxRequest());
             }
             finally
             {
                 StopProcessingOrder(originOrderId);
+            }
+
+            OutputResult HandleSavedMethod()
+            {
+                if (NeedUseSavedCard(order, out PaymentCardToken savedCard))
+                {
+                    string documentContent;
+                    try
+                    {
+                        documentContent = WebRequestHelper.ReadRequestInputStream();
+                    }
+                    catch (Exception e)
+                    {
+                        return OnError(order, "Cannot read selected payment method data", e, true);
+                    }
+
+                    if (string.IsNullOrEmpty(documentContent))
+                        return OnError(order, "Payment method is not selected", null, true);
+
+                    var paymentMethodData = Converter.Deserialize<PaymentMethodData>(documentContent);
+                    if (!paymentMethodData.PaymentMethod.StoredPaymentMethodId.Equals(savedCard.Token, StringComparison.OrdinalIgnoreCase))
+                        return OnError(order, "Selected card is not equal to stored payment card", null, true);
+
+                    string secirityCode = paymentMethodData.PaymentMethod.EncryptedSecurityCode;
+                    return PaymentMethodSelected(order, new()
+                    {
+                        PaymentMethod = new()
+                        {
+                            Type = CardPaymentMethodName,
+                            StoredPaymentMethodId = savedCard.Token,
+                            EncryptedSecurityCode = secirityCode
+                        }
+                    });
+                }
+
+                return OnError(order, "Order was not set to use saved card.", null, Helper.IsAjaxRequest());
             }
         }
 
@@ -293,17 +378,12 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             try
             {
                 string paymentMethodsResponse = WebRequestHelper.Request(ApiUrlManager.GetPaymentUrl(), paymentRequest.ToJson(), GetEnvironmentType(), ApiKey);
-
-                var error = Converter.Deserialize<ServiceError>(paymentMethodsResponse);
-                if (!string.IsNullOrEmpty(error.ErrorCode))
-                    return OnError(order, $"Error code: {error.ErrorCode}. {error.Message}", null, Helper.IsAjaxRequest());
-
                 var paymentResponse = Converter.Deserialize<PaymentResponse>(paymentMethodsResponse);
                 return HandleAdyenPaymentResponse(order, paymentResponse, paymentMethodsResponse, doSaveCard, cardName, paymentMethodData.PaymentMethod.Type);
             }
             catch (Exception e) when (e is not ThreadAbortException)
             {
-                return OnError(order, e.Message, e, true);
+                return OnError(order, e.Message, e, Helper.IsAjaxRequest());
             }
         }
 
@@ -831,10 +911,11 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Failed, infoTxt);
             }
 
+            double capturedAmount = response.Amount.Value.Value / 100d;
             order.CaptureInfo.Message = response.Status;
-            order.TransactionAmount = response.Amount.Value.Value;
+            order.TransactionAmount = capturedAmount;
 
-            LogEvent(order, "Capture successful", DebuggingInfoType.CaptureResult);
+            LogEvent(order, string.Format("Message=\"{0}\" Amount=\"{1:f2}\"", "Capture successful", capturedAmount), DebuggingInfoType.CaptureResult);
             return new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Success, "Capture successful");
         }
 

@@ -16,6 +16,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 {
     internal static class Helper
     {
+        public static string GetShopperReference(Order order) => $"user ID:{order.CustomerAccessUserId}";
+
         public static bool IsAjaxRequest()
         {
             return "application/json".Equals(Context.Current.Request.Headers["Content-Type"], StringComparison.OrdinalIgnoreCase);
