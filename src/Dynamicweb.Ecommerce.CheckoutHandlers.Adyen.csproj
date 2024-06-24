@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <VersionPrefix>10.1.2</VersionPrefix>
+    <VersionPrefix>10.2.0</VersionPrefix>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Title>Adyen</Title>
     <Description>Adyen Checkout Handler</Description>
