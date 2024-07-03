@@ -123,7 +123,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
                 Converter.ToString(amount.Value),
                 amount.Currency,
                 notificationRequestItem.EventCode,
-                notificationRequestItem.Success.ToString().ToLower()
+                notificationRequestItem.Success.ToLower()
             };
 
             return string.Join(":", signedDataList);

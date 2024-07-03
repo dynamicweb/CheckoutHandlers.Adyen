@@ -235,10 +235,13 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             {
                 try
                 {
-                    string jsonData;
-                    using (var inputStream = new StreamReader(Context.Current.Request.InputStream))
+                    string jsonData = (string)Context.Current.Items["AdyenCallback"];
+                    if (string.IsNullOrEmpty(jsonData))
                     {
-                        jsonData = inputStream.ReadToEnd();
+                        using (var inputStream = new StreamReader(Context.Current.Request.InputStream))
+                        {
+                            jsonData = inputStream.ReadToEndAsync().GetAwaiter().GetResult();
+                        }
                     }
 
                     Callback(order, jsonData);
@@ -675,6 +678,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
         private void HandleNotificationItem(Order order, NotificationRequestItem notificationItem)
         {
             NotificationEventCode? eventCode = notificationItem.GetNotificationEventCode();
+            bool isSuccess = Converter.ToBoolean(notificationItem.Success);
+
             switch (eventCode)
             {
                 case NotificationEventCode.Authorisation:
@@ -702,7 +707,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             void Authorisation()
             {
-                if (notificationItem.Success)
+                if (isSuccess)
                 {
                     if (!order.Complete)
                     {
@@ -729,7 +734,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
             void Capture()
             {
-                if (eventCode is NotificationEventCode.Capture && notificationItem.Success)
+                if (eventCode is NotificationEventCode.Capture && isSuccess)
                 {
                     UpdateTransactionNumber(order, notificationItem.PspReference);
                     order.TransactionAmount = notificationItem.Amount.Value.Value / 100d;
@@ -754,7 +759,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             void Cancellation()
             {
                 order.TransactionAmount = 0;
-                if (notificationItem.Success)
+                if (isSuccess)
                 {
                     Services.Taxes.CancelTaxes(order);
                     order.CaptureInfo = new OrderCaptureInfo(OrderCaptureInfo.OrderCaptureState.Cancel, string.Empty);
@@ -795,8 +800,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 
                 double refundAmount = notificationItem.Amount.Value.Value / 100d;
                 IEnumerable<OrderReturnInfo> existingOperations = order.ReturnOperations ?? new List<OrderReturnInfo>();
-                bool isFailedNotification = (notificationItem.Success && eventCode is NotificationEventCode.RefundFailed) || // literally: refund failed successfully
-                                           (!notificationItem.Success && eventCode is NotificationEventCode.Refund); // refund was not succeed
+                bool isFailedNotification = (isSuccess && eventCode is NotificationEventCode.RefundFailed) || // literally: refund failed successfully
+                                           (!isSuccess && eventCode is NotificationEventCode.Refund); // refund was not succeed
 
                 if (notificationItem.MerchantReference.Contains(RefundIdDelimeter)) // operation was created on DW side
                 {
