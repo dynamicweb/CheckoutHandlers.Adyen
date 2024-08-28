@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <VersionPrefix>10.2.1</VersionPrefix>
+    <VersionPrefix>10.7.0</VersionPrefix>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Title>Adyen</Title>
     <Description>Adyen Checkout Handler</Description>
@@ -29,8 +29,8 @@
     <None Remove="Updates\checkouthandler_error.cshtml" />
   </ItemGroup>
   <ItemGroup>
-	  <PackageReference Include="Dynamicweb.Core" Version="10.2.1" />
-	  <PackageReference Include="Dynamicweb.Ecommerce" Version="10.2.1" />
+	  <PackageReference Include="Dynamicweb.Core" Version="10.7.0" />
+	  <PackageReference Include="Dynamicweb.Ecommerce" Version="10.7.0" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
   </ItemGroup>
   <ItemGroup>

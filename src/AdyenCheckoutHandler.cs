@@ -7,19 +7,20 @@ using Dynamicweb.Ecommerce.Orders.Gateways;
 using Dynamicweb.Extensibility.AddIns;
 using Dynamicweb.Extensibility.Editors;
 using Dynamicweb.Frontend;
+using Dynamicweb.Logging;
 using Dynamicweb.Rendering;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
 {
     [AddInName("AdyenCheckout"), AddInDescription("Adyen checkout handler"), AddInUseParameterGrouping(true)]
-    public class AdyenCheckout : CheckoutHandler, IRemoteCapture, ICancelOrder, IFullReturn, IPartialReturn, ISavedCard
+    public class AdyenCheckout : CheckoutHandler, IRemoteCapture, ICancelOrder, IFullReturn, IPartialReturn, ISavedCard, ICheckoutHandlerCallback
     {
         private static class Tags
         {
@@ -233,24 +234,8 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             string action = Converter.ToString(Context.Current.Request["action"]);
             if (string.IsNullOrEmpty(action))
             {
-                try
-                {
-                    string jsonData = (string)Context.Current.Items["AdyenCallback"];
-                    if (string.IsNullOrEmpty(jsonData))
-                    {
-                        using (var inputStream = new StreamReader(Context.Current.Request.InputStream))
-                        {
-                            jsonData = inputStream.ReadToEndAsync().GetAwaiter().GetResult();
-                        }
-                    }
-
-                    Callback(order, jsonData);
-                    return ContentOutputResult.Empty;
-                }
-                finally
-                {
-                    StopProcessingOrder(originOrderId);
-                }
+                StopProcessingOrder(originOrderId);
+                return ContentOutputResult.Empty;
             }
 
             var redirectResult = Converter.ToString(Context.Current.Request["redirectResult"]);
@@ -1109,6 +1094,50 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen
             Services.Orders.Save(order);
 
             LogEvent(order, "Saved card created: {0}", savedCard.Name);
+        }
+
+        #endregion
+
+        #region ICheckoutHandlerCallback
+
+        public static Order GetOrderFromCallback(CallbackData data)
+        {
+            var logger = LogManager.System.GetLogger(LogCategory.Health, "Checkout");
+
+            NotificationRequest request = Converter.Deserialize<NotificationRequest>(data.Body);
+
+            if (request?.NotificationItemContainers?.Count is null or 0)
+            {
+                logger.Error("Adyen notification processing: data is not found", null);
+                return null;
+            }
+
+            if (request.NotificationItemContainers.Count > 1)
+            {
+                logger.Error("The webhook notification data should contain only one NotificationRequestItem.");
+                return null;
+            }
+
+            string merchantReference = request.NotificationItemContainers[0].NotificationItem?.MerchantReference ?? "";
+            string orderId = merchantReference.IndexOf(RefundIdDelimeter, StringComparison.OrdinalIgnoreCase) is int delimeterPosition && delimeterPosition > 0
+                ? merchantReference.Substring(0, delimeterPosition)
+                : merchantReference;
+
+            Order order = Services.Orders.GetById(orderId);
+            if (order is not null)
+            {
+                var message = new StringBuilder($"Adyen notification processing: {orderId}. Json data:");
+                message.AppendLine(data.Body);
+                Services.OrderDebuggingInfos.Save(order, message.ToString(), "Order", DebuggingInfoType.Undefined);
+            }
+
+            return order;
+        }
+
+        public OutputResult HandleCallback(Order order, CallbackData data)
+        {
+            Callback(order, data.Body);
+            return ContentOutputResult.Empty;
         }
 
         #endregion
