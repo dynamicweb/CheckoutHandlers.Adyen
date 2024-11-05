@@ -1,13 +1,11 @@
 ﻿using Dynamicweb.Core;
-using Dynamicweb.Core.Json.Settings;
-using System;
 using System.Runtime.Serialization;
 
 namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model
 {
     [DataContract]
     public abstract class RequestBase
-    {        
+    {
         [DataMember(Name = "merchantAccount")]
         public string MerchantAccount { get; set; }
 

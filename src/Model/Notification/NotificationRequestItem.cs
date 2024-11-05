@@ -42,7 +42,7 @@ namespace Dynamicweb.Ecommerce.CheckoutHandlers.Adyen.Model.Notification
         public string Reason { get; set; }
 
         [DataMember(Name = "success")]
-        public bool Success { get; set; }
+        public string Success { get; set; }
 
         public NotificationEventCode? GetNotificationEventCode()
         {
